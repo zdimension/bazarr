@@ -19,6 +19,7 @@ from subtitles.mass_download import movies_download_subtitles
 from utilities.helper import bool_map
 from utilities.path_mappings import path_mappings
 from subtitles.adaptive_searching import is_search_active
+from utilities.library_source import lock_library_source, using_plex_library
 
 from sqlalchemy.exc import IntegrityError
 from .parser import movieParser
@@ -102,6 +103,9 @@ def add_movie(added_movie):
 
 
 def update_movies(job_id=None, wait_for_completion=False):
+    if using_plex_library():
+        logging.debug('BAZARR skipped Radarr sync because Plex library mode is enabled.')
+        return
     if not job_id:
         jobs_queue.add_job_from_function("Syncing movies with Radarr", is_progress=True,
                                          wait_for_completion=wait_for_completion)
@@ -229,6 +233,7 @@ def update_movies(job_id=None, wait_for_completion=False):
                       f"{len(movies_updated)} updated")
 
             logging.debug('BAZARR All movies synced from Radarr into database.')
+            lock_library_source('arr')
     jobs_queue.update_job_name(job_id=job_id, new_job_name="Synced movies with Radarr")
 
 

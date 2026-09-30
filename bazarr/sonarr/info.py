@@ -22,6 +22,11 @@ class GetSonarrInfo:
         Call system/status API endpoint and get the Sonarr version
         @return: str
         """
+        # Plex library mode deliberately has no Sonarr dependency.  Status,
+        # announcement, and analytics callers still ask for a version, so
+        # return an empty value before touching the cache or logging a probe.
+        if settings.general.library_source == 'plex':
+            return ''
         sonarr_version = region.get("sonarr_version", expiration_time=datetime.timedelta(seconds=60).total_seconds())
         if sonarr_version and sonarr_version != 'unknown':
             region.set("sonarr_version", sonarr_version)

@@ -8,6 +8,7 @@ from radarr.sync.movies import update_one_movie
 from subtitles.mass_download import movies_download_subtitles
 from subtitles.indexer.movies import store_subtitles_movie
 from utilities.path_mappings import path_mappings
+from utilities.library_source import using_plex_library
 
 from ..utils import authenticate
 
@@ -63,6 +64,8 @@ class WebHooksRadarr(Resource):
     @api_ns_webhooks_radarr.response(401, "Not Authenticated")
     def post(self):
         """Search for missing subtitles based on Radarr webhooks"""
+        if using_plex_library():
+            return 'Plex library mode is enabled', 204
         args = api_ns_webhooks_radarr.payload
         event_type = args.get("eventType")
 

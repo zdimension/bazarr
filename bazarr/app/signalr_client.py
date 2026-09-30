@@ -25,6 +25,7 @@ from app.jobs_queue import jobs_queue
 from .config import settings
 from .scheduler import scheduler
 from .get_args import args
+from utilities.library_source import using_plex_library
 
 sonarr_queue = deque()
 radarr_queue = deque()
@@ -418,6 +419,26 @@ radarr_queue_thread.daemon = True
 radarr_queue_thread.start()
 
 # instantiate proper SignalR client
-sonarr_signalr_client = SonarrSignalrClientLegacy() if get_sonarr_info.version().startswith(('0.', '2.', '3.')) else \
-    SonarrSignalrClient()
-radarr_signalr_client = RadarrSignalrClient()
+class DisabledSignalrClient:
+    """Compatibility shell used when Plex is the immutable library source."""
+    connected = False
+
+    def start(self):
+        return None
+
+    def stop(self, *args, **kwargs):
+        return None
+
+    def restart(self):
+        return None
+
+
+if using_plex_library():
+    # Do not even inspect Arr versions: a Plex-only installation need not have
+    # either application reachable.
+    sonarr_signalr_client = DisabledSignalrClient()
+    radarr_signalr_client = DisabledSignalrClient()
+else:
+    sonarr_signalr_client = SonarrSignalrClientLegacy() if get_sonarr_info.version().startswith(('0.', '2.', '3.')) else \
+        SonarrSignalrClient()
+    radarr_signalr_client = RadarrSignalrClient()

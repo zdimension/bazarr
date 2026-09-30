@@ -14,6 +14,7 @@ from utilities.helper import bool_map
 from utilities.path_mappings import path_mappings
 from app.event_handler import event_stream
 from app.jobs_queue import jobs_queue
+from utilities.library_source import lock_library_source, using_plex_library
 
 from .episodes import sync_episodes
 from .parser import seriesParser
@@ -41,6 +42,9 @@ def get_series_monitored_table():
 
 
 def update_series(job_id=None, wait_for_completion=False):
+    if using_plex_library():
+        logging.debug('BAZARR skipped Sonarr sync because Plex library mode is enabled.')
+        return
     if not job_id:
         jobs_queue.add_job_from_function("Syncing series with Sonarr", is_progress=True,
                                          wait_for_completion=wait_for_completion)
@@ -128,6 +132,7 @@ def update_series(job_id=None, wait_for_completion=False):
             trace(f"skipped {skipped_count} unmonitored series out of {series_count}")
 
         logging.debug('BAZARR All series synced from Sonarr into database.')
+        lock_library_source('arr')
 
     jobs_queue.update_job_name(job_id=job_id, new_job_name="Synced series with Sonarr")
 

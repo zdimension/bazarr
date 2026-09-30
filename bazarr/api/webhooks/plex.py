@@ -10,11 +10,13 @@ from bs4 import BeautifulSoup as bso
 
 from app.database import TableEpisodes, TableShows, TableMovies, database, select
 from app.config import settings
+from app.jobs_queue import jobs_queue
 from subtitles.mass_download import episode_download_subtitles, movies_download_subtitles
 from app.logger import logger
 from ..plex.security import sanitize_log_data
 
 from ..utils import authenticate
+from utilities.library_source import using_plex_library
 
 
 api_ns_webhooks_plex = Namespace('Webhooks Plex', description='Webhooks endpoint that can be configured in Plex to '
@@ -124,7 +126,7 @@ class WebHooksPlex(Resource):
             
             event = parsed_json_webhook['event']
             
-            if event not in ['media.play', 'playback.started']:
+            if event not in ['media.play', 'playback.started', 'library.new', 'library.on.deck']:
                 logger.debug('PLEX WEBHOOK: Ignoring unhandled event "%s"', event)
                 return 'Unhandled event', 204
             
@@ -154,6 +156,40 @@ class WebHooksPlex(Resource):
             return 'Event for different library, skipping', 204
 
         media_type = parsed_json_webhook['Metadata']['type']
+
+        # New-content events are a low-latency hint only.  Polling remains the
+        # deletion authority, so receiving a duplicate or an old webhook can
+        # never remove a record.
+        if event in ['library.new', 'library.on.deck']:
+            if not using_plex_library():
+                return 'Plex library mode is disabled', 204
+            rating_key = parsed_json_webhook['Metadata'].get('ratingKey')
+            if not rating_key:
+                return 'No Plex rating key found', 204
+            jobs_queue.feed_jobs_pending_queue(
+                job_name=f'Syncing Plex item {rating_key}', module='plex.sync', func='sync_plex_item',
+                args=[rating_key], kwargs={'library_id': parsed_json_webhook['Metadata'].get('librarySectionID')})
+            return '', 200
+
+        if using_plex_library():
+            rating_key = parsed_json_webhook['Metadata'].get('ratingKey')
+            if not rating_key:
+                return 'No Plex rating key found', 204
+            # Ensure a just-added item exists locally, then search the stored
+            # physical parts instead of translating Plex metadata through IMDb.
+            from plex.sync import sync_plex_item
+            sync_plex_item(rating_key, parsed_json_webhook['Metadata'].get('librarySectionID'))
+            if media_type == 'episode':
+                rows = database.execute(select(TableEpisodes.sonarrEpisodeId)
+                                        .where(TableEpisodes.plex_item_id == int(rating_key))).all()
+                for row in rows:
+                    episode_download_subtitles(no=row.sonarrEpisodeId)
+            elif media_type == 'movie':
+                rows = database.execute(select(TableMovies.radarrId)
+                                        .where(TableMovies.plex_item_id == int(rating_key))).all()
+                for row in rows:
+                    movies_download_subtitles(no=row.radarrId)
+            return '', 200
 
         if media_type == 'episode':
             season = parsed_json_webhook['Metadata']['parentIndex']

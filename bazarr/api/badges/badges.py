@@ -13,6 +13,7 @@ from app.get_providers import get_throttled_providers
 from app.signalr_client import sonarr_signalr_client, radarr_signalr_client
 from app.announcements import get_all_announcements
 from utilities.health import get_health_issues
+from utilities.library_source import using_plex_library
 
 from ..utils import authenticate
 
@@ -67,14 +68,23 @@ class Badges(Resource):
         health_issues = len(get_health_issues())
 
         live_str = "LIVE" if settings.general.show_live_badge else ""
+        # SignalR is an Arr-only transport.  In Plex library mode it is
+        # intentionally disabled, so a DOWN badge would misrepresent a
+        # healthy Plex-backed Series/Movies library.
+        if using_plex_library():
+            sonarr_signalr = ''
+            radarr_signalr = ''
+        else:
+            sonarr_signalr = live_str if sonarr_signalr_client.connected else "DOWN"
+            radarr_signalr = live_str if radarr_signalr_client.connected else "DOWN"
 
         result = {
             "episodes": missing_episodes_count,
             "movies": missing_movies_count,
             "providers": throttled_providers,
             "status": health_issues,
-            'sonarr_signalr': live_str if sonarr_signalr_client.connected else "DOWN",
-            'radarr_signalr': live_str if radarr_signalr_client.connected else "DOWN",
+            'sonarr_signalr': sonarr_signalr,
+            'radarr_signalr': radarr_signalr,
             'announcements': len(get_all_announcements()),
         }
         return marshal(result, self.get_model)

@@ -45,6 +45,7 @@ from app.database import (System, database, update, migrate_db, create_db_revisi
 from app.notifier import update_notifier  # noqa E402
 from languages.get_languages import load_language_in_db  # noqa E402
 from app.jobs_queue import jobs_queue  # noqa E402
+from utilities.library_source import using_plex_library  # noqa E402
 from app.signalr_client import sonarr_signalr_client, radarr_signalr_client  # noqa E402
 from app.server import webserver, app  # noqa E402
 from app.announcements import get_announcements_to_file  # noqa E402
@@ -88,7 +89,7 @@ jobs_queue_thread.daemon = True
 jobs_queue_thread.start()
 logging.info("Interactive jobs queue started and waiting for tasks")
 
-if not args.no_signalr:
+if not args.no_signalr and not using_plex_library():
     if settings.general.use_sonarr:
         sonarr_signalr_thread = Thread(target=sonarr_signalr_client.start)
         sonarr_signalr_thread.daemon = True

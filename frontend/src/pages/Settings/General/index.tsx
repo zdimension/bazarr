@@ -76,6 +76,19 @@ const SettingsGeneralView: FunctionComponent = () => {
           192.168.0.100). Required for webhook security.
         </Message>
       </Section>
+      <Section header="Media Library">
+        <Selector
+          label="Library Source"
+          settingKey="settings-general-library_source"
+          options={[
+            { label: "Sonarr / Radarr", value: "arr" },
+            { label: "Plex Media Server", value: "plex" },
+          ]}
+        ></Selector>
+        <Message>
+          This choice is locked after Bazarr first syncs your library.
+        </Message>
+      </Section>
       <Section header="Security">
         <Selector
           label="Authentication"

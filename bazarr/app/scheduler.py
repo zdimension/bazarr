@@ -21,6 +21,7 @@ import logging
 from app.announcements import get_announcements_to_file
 from sonarr.sync.series import update_series
 from radarr.sync.movies import update_movies
+from plex.sync import sync_plex_library
 from subtitles.indexer.movies import movies_full_scan_subtitles
 from subtitles.indexer.series import series_full_scan_subtitles
 from subtitles.wanted import wanted_search_missing_subtitles_series, wanted_search_missing_subtitles_movies
@@ -32,6 +33,7 @@ from utilities.backup import backup_to_zip
 from .config import settings
 from .get_args import args
 from .event_handler import event_stream
+from utilities.library_source import using_plex_library
 
 if not args.no_update:
     from .check_update import check_if_new_update, check_releases
@@ -101,10 +103,24 @@ class Scheduler:
         self.aps_scheduler.start()
 
     def update_configurable_tasks(self):
+        # A source can be changed during initial setup, before the first sync
+        # locks it.  Remove the other source's jobs rather than leaving a
+        # previously scheduled Arr poll running in Plex mode (or vice versa).
+        inactive_jobs = (
+            ('update_series', 'update_movies', 'series_full_scan_subtitles', 'movies_full_scan_subtitles')
+            if using_plex_library() else ('update_plex_library',)
+        )
+        for job_id in inactive_jobs:
+            try:
+                self.aps_scheduler.remove_job(job_id)
+            except Exception:
+                pass
+        self.__plex_update_task()
         self.__sonarr_update_task()
         self.__radarr_update_task()
         self.__sonarr_full_update_task()
         self.__radarr_full_update_task()
+        self.__plex_full_update_task()
         self.__update_bazarr_task()
         self.__search_wanted_subtitles_task()
         self.__upgrade_subtitles_task()
@@ -198,17 +214,24 @@ class Scheduler:
         return task_list
 
     def __sonarr_update_task(self):
-        if settings.general.use_sonarr:
+        if not using_plex_library() and settings.general.use_sonarr:
             self.aps_scheduler.add_job(
                 update_series, 'interval', minutes=int(settings.sonarr.series_sync), max_instances=1,
                 coalesce=True, misfire_grace_time=15, id='update_series', name='Sync with Sonarr',
                 replace_existing=True, kwargs=dict(wait_for_completion=True))
 
     def __radarr_update_task(self):
-        if settings.general.use_radarr:
+        if not using_plex_library() and settings.general.use_radarr:
             self.aps_scheduler.add_job(
                 update_movies, 'interval', minutes=int(settings.radarr.movies_sync), max_instances=1,
                 coalesce=True, misfire_grace_time=15, id='update_movies', name='Sync with Radarr',
+                replace_existing=True, kwargs=dict(wait_for_completion=True))
+
+    def __plex_update_task(self):
+        if using_plex_library():
+            self.aps_scheduler.add_job(
+                sync_plex_library, 'interval', minutes=int(settings.plex.library_sync), max_instances=1,
+                coalesce=True, misfire_grace_time=15, id='update_plex_library', name='Sync with Plex',
                 replace_existing=True, kwargs=dict(wait_for_completion=True))
 
     def __cache_cleanup_task(self):
@@ -235,7 +258,7 @@ class Scheduler:
                                    kwargs=dict(wait_for_completion=True))
 
     def __sonarr_full_update_task(self):
-        if settings.general.use_sonarr:
+        if not using_plex_library() and settings.general.use_sonarr:
             full_update = settings.sonarr.full_update
             if full_update == "Daily":
                 self.aps_scheduler.add_job(
@@ -256,7 +279,7 @@ class Scheduler:
                     name='Index All Existing Episodes Subtitles', replace_existing=True)
 
     def __radarr_full_update_task(self):
-        if settings.general.use_radarr:
+        if not using_plex_library() and settings.general.use_radarr:
             full_update = settings.radarr.full_update
             if full_update == "Daily":
                 self.aps_scheduler.add_job(
@@ -275,6 +298,25 @@ class Scheduler:
                     movies_full_scan_subtitles, 'cron', year=in_a_century(), max_instances=1, coalesce=True,
                     misfire_grace_time=15, id='movies_full_scan_subtitles', name='Index All Existing Movies Subtitles',
                     replace_existing=True, kwargs=dict(wait_for_completion=True))
+
+    def __plex_full_update_task(self):
+        if not using_plex_library():
+            return
+        full_update = settings.plex.full_update
+        if full_update == 'Daily':
+            trigger = {'hour': settings.plex.full_update_hour}
+        elif full_update == 'Weekly':
+            trigger = {'day_of_week': settings.plex.full_update_day, 'hour': settings.plex.full_update_hour}
+        else:
+            trigger = {'year': in_a_century()}
+        for func, task_id, name in (
+            (series_full_scan_subtitles, 'series_full_scan_subtitles', 'Index All Existing Episodes Subtitles'),
+            (movies_full_scan_subtitles, 'movies_full_scan_subtitles', 'Index All Existing Movies Subtitles'),
+        ):
+            self.aps_scheduler.add_job(func, 'cron', **trigger, max_instances=1, coalesce=True,
+                                       misfire_grace_time=15, id=task_id, name=name, replace_existing=True,
+                                       kwargs=dict(wait_for_completion=True,
+                                                   use_cache=settings.plex.use_ffprobe_cache))
 
     def __update_bazarr_task(self):
         if not args.no_update and os.environ["BAZARR_VERSION"] not in ['', 'unknown']:
@@ -305,13 +347,13 @@ class Scheduler:
             kwargs=dict(wait_for_completion=True))
 
     def __search_wanted_subtitles_task(self):
-        if settings.general.use_sonarr:
+        if using_plex_library() or settings.general.use_sonarr:
             self.aps_scheduler.add_job(
                 wanted_search_missing_subtitles_series, 'interval', hours=int(settings.general.wanted_search_frequency),
                 max_instances=1, coalesce=True, misfire_grace_time=15, id='wanted_search_missing_subtitles_series',
                 replace_existing=True, name='Search for Missing Series Subtitles',
                 kwargs=dict(wait_for_completion=True))
-        if settings.general.use_radarr:
+        if using_plex_library() or settings.general.use_radarr:
             self.aps_scheduler.add_job(
                 wanted_search_missing_subtitles_movies, 'interval',
                 hours=int(settings.general.wanted_search_frequency_movie), max_instances=1, coalesce=True,
@@ -320,7 +362,7 @@ class Scheduler:
                 kwargs=dict(wait_for_completion=True))
 
     def __upgrade_subtitles_task(self):
-        if settings.general.use_sonarr or settings.general.use_radarr:
+        if using_plex_library() or settings.general.use_sonarr or settings.general.use_radarr:
             self.aps_scheduler.add_job(
                 upgrade_subtitles, 'interval', hours=int(settings.general.upgrade_frequency), max_instances=1,
                 coalesce=True, misfire_grace_time=15, id='upgrade_subtitles', kwargs=dict(wait_for_completion=True),

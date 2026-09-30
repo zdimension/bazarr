@@ -6,9 +6,12 @@ import {
 } from "@/apis/hooks/plex";
 import {
   Check,
+  Chips,
   CollapseBox,
   Layout,
   Message,
+  PathMappingTable,
+  Selector,
   Section,
 } from "@/pages/Settings/components";
 import { plexEnabledKey } from "@/pages/Settings/keys";
@@ -59,6 +62,33 @@ const SettingsPlexView = () => {
                 libraryType="movie"
                 description="Select your movie library from Plex"
               />
+              <Selector
+                label="Sync Plex libraries"
+                settingKey="settings-plex-library_sync"
+                options={[
+                  { label: "Manually", value: 52560000 },
+                  { label: "15 Minutes", value: 15 },
+                  { label: "1 Hour", value: 60 },
+                  { label: "3 Hours", value: 180 },
+                  { label: "6 Hours", value: 360 },
+                  { label: "12 Hours", value: 720 },
+                  { label: "24 Hours", value: 1440 },
+                  { label: "Weekly", value: 10080 },
+                ]}
+              />
+              <Chips
+                label="Excluded Plex Labels"
+                settingKey="settings-plex-excluded_tags"
+                sanitizeFn={(values: string[] | null) =>
+                  values?.map((item) =>
+                    item.replace(/[^a-z0-9_-]/gi, "").toLowerCase(),
+                  )
+                }
+              />
+              <Message>
+                Files whose movie or show has one of these Plex labels are
+                excluded from automatic subtitle downloads.
+              </Message>
               <Check
                 label="Mark movies as recently added after downloading subtitles"
                 settingKey="settings-plex-set_movie_added"
@@ -101,6 +131,14 @@ const SettingsPlexView = () => {
                 Refreshes the episode in Plex so the newly downloaded subtitle
                 file is detected.
               </Message>
+            </Section>
+
+            <Section header="Movie Path Mappings">
+              <PathMappingTable type="plex-movies"></PathMappingTable>
+            </Section>
+
+            <Section header="Series Path Mappings">
+              <PathMappingTable type="plex-series"></PathMappingTable>
             </Section>
           </>
         )}

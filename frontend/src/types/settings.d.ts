@@ -7,6 +7,7 @@ interface Settings {
   analytics: Settings.Analytic;
   sonarr: Settings.Sonarr;
   radarr: Settings.Radarr;
+  plex: Settings.Plex;
   backup: Settings.Backup;
   translator: Settings.Translator;
   // Anitcaptcha
@@ -82,6 +83,7 @@ declare namespace Settings {
     use_radarr: boolean;
     use_scenename: boolean;
     use_sonarr: boolean;
+    library_source?: "arr" | "plex";
     utf8_encode: boolean;
     wanted_search_frequency: number;
     wanted_search_frequency_movie: number;
@@ -204,6 +206,8 @@ declare namespace Settings {
     set_episode_added?: boolean;
     movie_library?: string[];
     series_library?: string[];
+    movie_library_ids?: string[];
+    series_library_ids?: string[];
     update_movie_library?: boolean;
     update_series_library?: boolean;
     use_autopulse?: boolean;
@@ -211,6 +215,12 @@ declare namespace Settings {
     autopulse_port?: number;
     autopulse_username?: string;
     autopulse_password?: string;
+    library_sync?: number;
+    excluded_tags?: string[];
+    full_update?: "Manually" | "Daily" | "Weekly";
+    full_update_day?: number;
+    full_update_hour?: number;
+    use_ffprobe_cache?: boolean;
   }
 
   interface Anticaptcha {

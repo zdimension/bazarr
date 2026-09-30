@@ -112,6 +112,10 @@ validators = [
     Validator('general.external_webhook_password', must_exist=True, default='', is_type_of=str),
     Validator('general.use_sonarr', must_exist=True, default=False, is_type_of=bool),
     Validator('general.use_radarr', must_exist=True, default=False, is_type_of=bool),
+    # The source is deliberately separate from the integration toggles.  It is
+    # locked in the database after the first successful library sync.
+    Validator('general.library_source', must_exist=True, default='arr', is_type_of=str,
+              is_in=['arr', 'plex']),
     Validator('general.use_plex', must_exist=True, default=False, is_type_of=bool),
     Validator('general.use_jellyfin', must_exist=True, default=False, is_type_of=bool),
     Validator('general.path_mappings_movie', must_exist=True, default=[], is_type_of=list),
@@ -268,6 +272,14 @@ validators = [
     Validator('plex.set_episode_added', must_exist=True, default=False, is_type_of=bool),
     Validator('plex.update_movie_library', must_exist=True, default=False, is_type_of=bool),
     Validator('plex.update_series_library', must_exist=True, default=False, is_type_of=bool),
+    Validator('plex.library_sync', must_exist=True, default=60, is_type_of=int,
+              is_in=[15, 60, 180, 360, 720, 1440, 10080, ONE_HUNDRED_YEARS_IN_MINUTES]),
+    Validator('plex.excluded_tags', must_exist=True, default=[], is_type_of=list, condition=validate_tags),
+    Validator('plex.full_update', must_exist=True, default='Daily', is_type_of=str,
+              is_in=['Manually', 'Daily', 'Weekly']),
+    Validator('plex.full_update_day', must_exist=True, default=6, is_type_of=int, gte=0, lte=6),
+    Validator('plex.full_update_hour', must_exist=True, default=4, is_type_of=int, gte=0, lte=23),
+    Validator('plex.use_ffprobe_cache', must_exist=True, default=True, is_type_of=bool),
     # OAuth fields
     Validator('plex.token', must_exist=True, default='', is_type_of=str),
     Validator('plex.username', must_exist=True, default='', is_type_of=str),
@@ -705,6 +717,7 @@ def save_settings(settings_items):
     audio_tracks_parsing_changed = False
     reset_providers = False
     language_equals_changed = False
+    library_source_changed = False
 
     # Subzero Mods
     update_subzero = False
@@ -765,6 +778,17 @@ def save_settings(settings_items):
         if key == 'settings-general-instance_name' and value == '':
             value = None
 
+        if key == 'settings-general-library_source':
+            # The database is the durable source-of-truth once any library has
+            # been synced.  Validate before changing the YAML setting.
+            from utilities.library_source import validate_library_source_change
+            validate_library_source_change(value)
+            if value == 'plex':
+                # Plex library mode necessarily uses the existing Plex
+                # integration for refreshes and recently-added updates.
+                settings.general.use_plex = True
+            library_source_changed = True
+
         if key == 'settings-auth-password':
             if value != settings.auth.password and value is not None:
                 value = hashlib.md5(f"{value}".encode('utf-8')).hexdigest()
@@ -781,6 +805,9 @@ def save_settings(settings_items):
             configure_captcha = True
 
         if key in ['update_schedule', 'settings-general-use_sonarr', 'settings-general-use_radarr',
+                   'settings-general-library_source', 'settings-plex-library_sync',
+                   'settings-plex-full_update', 'settings-plex-full_update_day', 'settings-plex-full_update_hour',
+                   'settings-plex-use_ffprobe_cache',
                    'settings-general-auto_update', 'settings-general-upgrade_subs',
                    'settings-sonarr-series_sync', 'settings-radarr-movies_sync',
                    'settings-sonarr-full_update', 'settings-sonarr-full_update_day', 'settings-sonarr-full_update_hour',
@@ -970,6 +997,18 @@ def save_settings(settings_items):
             from .event_handler import event_stream
             scheduler.update_configurable_tasks()
             event_stream(type='task')
+
+        if library_source_changed:
+            from utilities.library_source import using_plex_library
+            from .signalr_client import radarr_signalr_client, sonarr_signalr_client
+            if using_plex_library():
+                sonarr_signalr_client.stop()
+                radarr_signalr_client.stop()
+            else:
+                if settings.general.use_sonarr:
+                    sonarr_signalr_client.restart()
+                if settings.general.use_radarr:
+                    radarr_signalr_client.restart()
 
         if sonarr_changed:
             from .signalr_client import sonarr_signalr_client

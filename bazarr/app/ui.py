@@ -15,6 +15,7 @@ from sonarr.info import url_api_sonarr
 from radarr.info import url_api_radarr
 from utilities.helper import check_credentials
 from utilities.central import get_log_file_path
+from utilities.library_source import using_plex_library
 
 from .config import settings, base_url
 from .database import database, System
@@ -152,9 +153,23 @@ def _proxy_image(url_image):
                         headers={'Cache-Control': f'private, max-age={_IMAGE_CACHE_MAX_AGE}'})
 
 
+def _plex_image(url):
+    """Proxy a relative Plex artwork key without leaking its token to browsers."""
+    if not url.startswith('/') or url.startswith('//'):
+        return '', 404
+    try:
+        from plex.operations import get_plex_server
+        plex = get_plex_server()
+        return _proxy_image(plex.url(url, includeToken=True))
+    except Exception:
+        return '', 404
+
+
 @ui_bp.route('/images/series/<path:url>', methods=['GET'])
 @check_login
 def series_images(url):
+    if using_plex_library():
+        return _plex_image('/' + url.lstrip('/'))
     apikey = settings.sonarr.apikey
     baseUrl = settings.sonarr.base_url
     sonarr_api_base = url_api_sonarr()
@@ -183,6 +198,8 @@ def series_images(url):
 @ui_bp.route('/images/movies/<path:url>', methods=['GET'])
 @check_login
 def movies_images(url):
+    if using_plex_library():
+        return _plex_image('/' + url.lstrip('/'))
     apikey = settings.radarr.apikey
     baseUrl = settings.radarr.base_url
     radarr_api_base = url_api_radarr()

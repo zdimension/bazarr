@@ -229,6 +229,25 @@ def plex_refresh_item(imdb_id: str, is_movie: bool, season: int = None, episode:
     """
     try:
         plex = get_plex_server()
+        # In Plex library mode the database carries the exact rating key.  Use
+        # it first so editions and multiple physical parts do not depend on an
+        # IMDb lookup (which Plex metadata may not have).
+        from utilities.library_source import using_plex_library
+        if using_plex_library():
+            from app.database import TableEpisodes, TableMovies, TableShows, database, select
+            if is_movie:
+                row = database.execute(select(TableMovies.plex_item_id)
+                                       .where(TableMovies.imdbId == imdb_id,
+                                              TableMovies.plex_item_id.is_not(None))).first()
+            else:
+                row = database.execute(
+                    select(TableEpisodes.plex_item_id).select_from(TableEpisodes).join(TableShows)
+                    .where(TableShows.imdbId == imdb_id, TableEpisodes.season == season,
+                           TableEpisodes.episode == episode, TableEpisodes.plex_item_id.is_not(None))).first()
+            if row:
+                plex.fetchItem(int(row.plex_item_id)).refresh()
+                logger.info('Refreshed Plex item %s', row.plex_item_id)
+                return
         library_names = settings.plex.movie_library if is_movie else settings.plex.series_library
         
         # Ensure we have a list

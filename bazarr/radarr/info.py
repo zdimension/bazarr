@@ -22,6 +22,11 @@ class GetRadarrInfo:
         Call system/status API endpoint and get the Radarr version
         @return: str
         """
+        # Plex library mode deliberately has no Radarr dependency.  Status,
+        # announcement, and analytics callers still ask for a version, so
+        # return an empty value before touching the cache or logging a probe.
+        if settings.general.library_source == 'plex':
+            return ''
         radarr_version = region.get("radarr_version", expiration_time=datetime.timedelta(seconds=60).total_seconds())
         if radarr_version and radarr_version != 'unknown':
             region.set("radarr_version", radarr_version)

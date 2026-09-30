@@ -1,5 +1,5 @@
 import { FunctionComponent, useCallback, useMemo } from "react";
-import { Button, Code, List, Stack, Text } from "@mantine/core";
+import { Button, Code, List, Stack, Text, TextInput } from "@mantine/core";
 import { faArrowCircleRight, faTrash } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { capitalize } from "lodash";
@@ -17,10 +17,18 @@ import { useSettingValue } from "@/pages/Settings/utilities/hooks";
 import { useArrayAction } from "@/utilities";
 import { Message } from "./Message";
 
-type SupportType = "sonarr" | "radarr";
+type SupportType = "sonarr" | "radarr" | "plex-series" | "plex-movies";
+
+const isSeries = (type: SupportType) =>
+  type === "sonarr" || type === "plex-series";
+
+const isPlex = (type: SupportType) => type.startsWith("plex-");
+
+const getSupportName = (type: SupportType) =>
+  isPlex(type) ? "Plex" : capitalize(type);
 
 const getSupportKey = (type: SupportType) => {
-  if (type === "sonarr") {
+  if (isSeries(type)) {
     return pathMappingsKey;
   } else {
     return pathMappingsMovieKey;
@@ -28,7 +36,7 @@ const getSupportKey = (type: SupportType) => {
 };
 
 const getEnabledKey = (type: SupportType) => {
-  if (type === "sonarr") {
+  if (isSeries(type)) {
     return seriesEnabledKey;
   } else {
     return moviesEnabledKey;
@@ -45,10 +53,10 @@ interface TableProps {
 }
 
 const PathMappingHelp: FunctionComponent<TableProps> = ({ type }) => {
-  const support = capitalize(type);
-  const noun = type === "sonarr" ? "series" : "movies";
-  const windowsPath = type === "sonarr" ? "D:\\TV" : "D:\\Movies";
-  const bazarrPath = type === "sonarr" ? "/data/tv" : "/data/movies";
+  const support = getSupportName(type);
+  const noun = isSeries(type) ? "series" : "movies";
+  const windowsPath = isSeries(type) ? "D:\\TV" : "D:\\Movies";
+  const bazarrPath = isSeries(type) ? "/data/tv" : "/data/movies";
 
   return (
     <Stack gap="xs" data-testid="path-mapping-help">
@@ -93,7 +101,18 @@ export const PathMappingTable: FunctionComponent<TableProps> = ({ type }) => {
   const items = useSettingValue<[string, string][]>(key);
 
   const enabledKey = getEnabledKey(type);
-  const enabled = useSettingValue<boolean>(enabledKey, { original: true });
+  const supportEnabled = useSettingValue<boolean>(enabledKey, {
+    original: true,
+  });
+  const librarySource = useSettingValue<string>(
+    "settings-general-library_source",
+    {
+      original: true,
+    },
+  );
+  const enabled = isPlex(type) ? librarySource === "plex" : supportEnabled;
+  const support = getSupportName(type);
+  const browserType = isSeries(type) ? "sonarr" : "radarr";
 
   const { setValue } = useFormActions();
 
@@ -126,12 +145,29 @@ export const PathMappingTable: FunctionComponent<TableProps> = ({ type }) => {
   const columns = useMemo<ColumnDef<PathMappingItem>[]>(
     () => [
       {
-        header: capitalize(type),
+        header: support,
         accessorKey: "from",
         cell: ({ row: { original, index } }) => {
+          if (isPlex(type)) {
+            // Plex does not expose a filesystem-browser API. This is the
+            // source path shown by Plex for the media part, so it is entered
+            // directly while the Bazarr destination can still be browsed.
+            return (
+              <TextInput
+                placeholder="Path reported by Plex"
+                value={original.from}
+                onChange={(event) => {
+                  action.mutate(index, {
+                    ...original,
+                    from: event.currentTarget.value,
+                  });
+                }}
+              ></TextInput>
+            );
+          }
           return (
             <FileBrowser
-              type={type}
+              type={browserType}
               defaultValue={original.from}
               onChange={(path) => {
                 action.mutate(index, { ...original, from: path });
@@ -175,7 +211,7 @@ export const PathMappingTable: FunctionComponent<TableProps> = ({ type }) => {
         },
       },
     ],
-    [action, type],
+    [action, browserType, support, type],
   );
 
   return (

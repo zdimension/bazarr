@@ -8,6 +8,7 @@ from sonarr.sync.episodes import sync_one_episode
 from subtitles.mass_download import episode_download_subtitles
 from subtitles.indexer.series import store_subtitles
 from utilities.path_mappings import path_mappings
+from utilities.library_source import using_plex_library
 
 
 from ..utils import authenticate
@@ -64,6 +65,8 @@ class WebHooksSonarr(Resource):
     @api_ns_webhooks_sonarr.response(401, "Not Authenticated")
     def post(self):
         """Search for missing subtitles based on Sonarr webhooks"""
+        if using_plex_library():
+            return 'Plex library mode is enabled', 204
         args = api_ns_webhooks_sonarr.payload
         event_type = args.get("eventType")
 

@@ -1,6 +1,7 @@
 import { FunctionComponent, useMemo } from "react";
 import { Box, Text as MantineText } from "@mantine/core";
 import { SelectorOption } from "@/components";
+import { useSystemSettings } from "@/apis/hooks";
 import {
   Check,
   CollapseBox,
@@ -21,6 +22,8 @@ import {
 } from "./options";
 
 const SettingsSchedulerView: FunctionComponent = () => {
+  const { data: settings } = useSystemSettings();
+  const plexMode = settings?.general.library_source === "plex";
   const timeOptions = useMemo(() => {
     return Array(24)
       .fill(null)
@@ -32,92 +35,105 @@ const SettingsSchedulerView: FunctionComponent = () => {
 
   return (
     <Layout name="Scheduler">
-      <Section header="Sonarr/Radarr Sync">
-        <Selector
-          label="Sync with Sonarr"
-          options={seriesSyncOptions}
-          settingKey="settings-sonarr-series_sync"
-        ></Selector>
-        <Selector
-          label="Sync with Radarr"
-          options={moviesSyncOptions}
-          settingKey="settings-radarr-movies_sync"
-        ></Selector>
+      <Section header={plexMode ? "Plex Sync" : "Sonarr/Radarr Sync"}>
+        {plexMode ? (
+          <Selector
+            label="Sync with Plex"
+            options={seriesSyncOptions}
+            settingKey="settings-plex-library_sync"
+          />
+        ) : (
+          <>
+            <Selector
+              label="Sync with Sonarr"
+              options={seriesSyncOptions}
+              settingKey="settings-sonarr-series_sync"
+            ></Selector>
+            <Selector
+              label="Sync with Radarr"
+              options={moviesSyncOptions}
+              settingKey="settings-radarr-movies_sync"
+            ></Selector>
+          </>
+        )}
       </Section>
-      <Section header="Disk Indexing">
-        <Selector
-          label="Update All Episode Subtitles from Disk"
-          settingKey="settings-sonarr-full_update"
-          options={diskUpdateOptions}
-        ></Selector>
-
-        <CollapseBox
-          settingKey="settings-sonarr-full_update"
-          on={(k) => k === "Weekly"}
-        >
+      {!plexMode && (
+        <Section header="Disk Indexing">
           <Selector
-            label="Day of Week"
-            settingKey="settings-sonarr-full_update_day"
-            options={dayOptions}
+            label="Update All Episode Subtitles from Disk"
+            settingKey="settings-sonarr-full_update"
+            options={diskUpdateOptions}
           ></Selector>
-        </CollapseBox>
-        <CollapseBox
-          settingKey="settings-sonarr-full_update"
-          on={(k) => k === "Daily" || k === "Weekly"}
-        >
+
+          <CollapseBox
+            settingKey="settings-sonarr-full_update"
+            on={(k) => k === "Weekly"}
+          >
+            <Selector
+              label="Day of Week"
+              settingKey="settings-sonarr-full_update_day"
+              options={dayOptions}
+            ></Selector>
+          </CollapseBox>
+          <CollapseBox
+            settingKey="settings-sonarr-full_update"
+            on={(k) => k === "Daily" || k === "Weekly"}
+          >
+            <Selector
+              label="Time of Day"
+              settingKey="settings-sonarr-full_update_hour"
+              options={timeOptions}
+            ></Selector>
+          </CollapseBox>
+
+          <Check
+            label="Use cached embedded subtitles parser results"
+            settingKey="settings-sonarr-use_ffprobe_cache"
+          ></Check>
+          <Message>
+            If disabled, Bazarr will use the embedded subtitles parser to index
+            episodes file properties on each run. This will result in higher
+            disk I/O.
+          </Message>
+
           <Selector
-            label="Time of Day"
-            settingKey="settings-sonarr-full_update_hour"
-            options={timeOptions}
+            label="Update All Movie Subtitles from Disk"
+            settingKey="settings-radarr-full_update"
+            options={diskUpdateOptions}
           ></Selector>
-        </CollapseBox>
 
-        <Check
-          label="Use cached embedded subtitles parser results"
-          settingKey="settings-sonarr-use_ffprobe_cache"
-        ></Check>
-        <Message>
-          If disabled, Bazarr will use the embedded subtitles parser to index
-          episodes file properties on each run. This will result in higher disk
-          I/O.
-        </Message>
+          <CollapseBox
+            settingKey="settings-radarr-full_update"
+            on={(k) => k === "Weekly"}
+          >
+            <Selector
+              label="Day of Week"
+              settingKey="settings-radarr-full_update_day"
+              options={dayOptions}
+            ></Selector>
+          </CollapseBox>
+          <CollapseBox
+            settingKey="settings-radarr-full_update"
+            on={(k) => k === "Daily" || k === "Weekly"}
+          >
+            <Selector
+              label="Time of Day"
+              settingKey="settings-radarr-full_update_hour"
+              options={timeOptions}
+            ></Selector>
+          </CollapseBox>
 
-        <Selector
-          label="Update All Movie Subtitles from Disk"
-          settingKey="settings-radarr-full_update"
-          options={diskUpdateOptions}
-        ></Selector>
-
-        <CollapseBox
-          settingKey="settings-radarr-full_update"
-          on={(k) => k === "Weekly"}
-        >
-          <Selector
-            label="Day of Week"
-            settingKey="settings-radarr-full_update_day"
-            options={dayOptions}
-          ></Selector>
-        </CollapseBox>
-        <CollapseBox
-          settingKey="settings-radarr-full_update"
-          on={(k) => k === "Daily" || k === "Weekly"}
-        >
-          <Selector
-            label="Time of Day"
-            settingKey="settings-radarr-full_update_hour"
-            options={timeOptions}
-          ></Selector>
-        </CollapseBox>
-
-        <Check
-          label="Use cached embedded subtitles parser results"
-          settingKey="settings-radarr-use_ffprobe_cache"
-        ></Check>
-        <Message>
-          If disabled, Bazarr will use embedded subtitles parser to index movies
-          file properties on each run. This will result in higher disk I/O.
-        </Message>
-      </Section>
+          <Check
+            label="Use cached embedded subtitles parser results"
+            settingKey="settings-radarr-use_ffprobe_cache"
+          ></Check>
+          <Message>
+            If disabled, Bazarr will use embedded subtitles parser to index
+            movies file properties on each run. This will result in higher disk
+            I/O.
+          </Message>
+        </Section>
+      )}
       <Section header="Search and Upgrade Subtitles">
         <Selector
           label="Search for Missing Series Subtitles"

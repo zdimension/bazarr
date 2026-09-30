@@ -9,6 +9,9 @@ from constants import HEADERS
 
 
 def notify_sonarr(sonarr_series_id):
+    from utilities.library_source import using_plex_library
+    if using_plex_library():
+        return
     try:
         url = f"{url_api_sonarr()}command?apikey={settings.sonarr.apikey}"
         data = {

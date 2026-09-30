@@ -1,10 +1,13 @@
 import { FunctionComponent } from "react";
-import { Outlet } from "react-router";
+import { Navigate, Outlet } from "react-router";
 import { useSystemSettings } from "@/apis/hooks";
 import { SegmentedTab, SegmentedTabs } from "@/pages/Settings/components";
 
 const SettingsLibraryView: FunctionComponent = () => {
   const { data: settings } = useSystemSettings();
+  if (settings?.general.library_source === "plex") {
+    return <Navigate to="/settings/integrations/plex" replace />;
+  }
 
   const tabs: readonly SegmentedTab[] = [
     {
