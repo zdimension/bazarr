@@ -253,6 +253,19 @@ def get_providers_auth():
             'cookies': settings.cinemaz.cookies,
             'user_agent': settings.cinemaz.user_agent,
         },
+        'opensubtitles': {
+            'username': settings.opensubtitles.username,
+            'password': settings.opensubtitles.password,
+            'use_tag_search': settings.opensubtitles.use_tag_search,
+            'only_foreign': False,  # fixme
+            'also_foreign': False,  # fixme
+            'is_vip': settings.opensubtitles.vip,
+            'use_ssl': settings.opensubtitles.ssl,
+            'timeout': int(settings.opensubtitles.timeout) or 15,
+            'skip_wrong_fps': settings.opensubtitles.skip_wrong_fps,
+            'use_web_scraper': settings.opensubtitles.use_web_scraper,
+            'scraper_service_url': settings.opensubtitles.scraper_service_url,
+        },
         'opensubtitlescom': {'username': settings.opensubtitlescom.username,
                              'password': settings.opensubtitlescom.password,
                              'use_hash': settings.opensubtitlescom.use_hash,

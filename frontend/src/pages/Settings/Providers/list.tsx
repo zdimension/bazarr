@@ -416,6 +416,27 @@ export const ProviderList: Readonly<ProviderInfo[]> = [
   },
   { key: "nekur", description: "Latvian Subtitles Provider" },
   {
+    key: "opensubtitles",
+    name: "OpenSubtitles.org",
+    description:
+      "Uses web scraper (OpenSubtitles.org login is no longer available). Get it at https://github.com/LavX/opensubtitles-scraper",
+    inputs: [
+      {
+        type: "text",
+        key: "scraper_service_url",
+        name: "Scraper Service URL",
+        defaultValue: "http://localhost:8000",
+        description: "URL of the OpenSubtitles scraper service",
+      },
+      {
+        type: "switch",
+        key: "skip_wrong_fps",
+        name: "Skip Wrong FPS",
+        description: "Skip subtitles with mismatched frame rates",
+      },
+    ],
+  },
+  {
     key: "opensubtitlescom",
     name: "OpenSubtitles.com",
     inputs: [
