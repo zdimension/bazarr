@@ -18,6 +18,41 @@ def test_plex_guid_and_label_normalisation():
     assert _labels(item) == ['french', 'no-auto-subs']
 
 
+def test_plex_guid_normalisation_supports_legacy_agent_attributes():
+    from plex.sync import _guids
+
+    # Plex's legacy TVDB agent places the show ID in grandparentGuid rather
+    # than returning a nested <Guid id="tvdb://..."> element.
+    episode = SimpleNamespace(
+        guids=[],
+        guid='com.plexapp.agents.thetvdb://76894/1/223?lang=fr',
+        parentGuid='com.plexapp.agents.thetvdb://76894/1?lang=fr',
+        grandparentGuid='com.plexapp.agents.thetvdb://76894?lang=fr',
+    )
+
+    assert _guids(episode) == {'tvdb': '76894'}
+
+
+def test_database_refiner_allows_a_series_without_a_tvdb_id(monkeypatch):
+    from subliminal import Episode
+    from subtitles.refiners import database as database_refiner
+
+    row = SimpleNamespace(
+        seriesTitle='Yu-Gi-Oh!', season=1, episode=1, absoluteEpisode=None,
+        episodeTitle='The Heart of the Cards', year='2000', tvdbId=None,
+        alternativeTitles='[]', format=None, resolution=None, video_codec=None,
+        audio_codec=None, imdbId=None, sonarrSeriesId=1, sonarrEpisodeId=2,
+    )
+    monkeypatch.setattr(database_refiner.database, 'execute',
+                        lambda statement: SimpleNamespace(first=lambda: row))
+    monkeypatch.setattr(database_refiner.path_mappings, 'path_replace_reverse', lambda path: path)
+    video = Episode('episode.mkv', series='Guessed series', season=1, episode=1, series_tvdb_id=123)
+
+    database_refiner.refine_from_db('episode.mkv', video)
+
+    assert video.series_tvdb_id == 123
+
+
 def test_plex_parts_keeps_each_valid_physical_part():
     from plex import sync
 

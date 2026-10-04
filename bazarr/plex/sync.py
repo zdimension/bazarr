@@ -38,13 +38,26 @@ def _value(obj, name, default=None):
 
 def _guids(video):
     result = {}
-    for guid in _value(video, 'guids', []) or []:
-        guid = _value(guid, 'id', guid)
+    guids = [_value(guid, 'id', guid) for guid in (_value(video, 'guids', []) or [])]
+    # Older Plex agents expose external IDs only in the legacy GUID
+    # attributes (for example ``com.plexapp.agents.thetvdb://76894?lang=fr``)
+    # instead of as nested ``<Guid id="tvdb://76894">`` elements.
+    guids.extend(_value(video, attribute) for attribute in ('guid', 'parentGuid', 'grandparentGuid'))
+    for guid in guids:
         if not isinstance(guid, str) or '://' not in guid:
             continue
         source, value = guid.split('://', 1)
+        source = {
+            'com.plexapp.agents.thetvdb': 'tvdb',
+            'com.plexapp.agents.themoviedb': 'tmdb',
+            'com.plexapp.agents.imdb': 'imdb',
+        }.get(source, source)
+        # Agent GUIDs for seasons and episodes append their numbers after the
+        # series ID, and may carry a language query parameter.
+        value = value.split('?', 1)[0].split('/', 1)[0]
         if source in ('imdb', 'tmdb', 'tvdb'):
-            result[source] = value
+            # Prefer current Plex GUID elements when both formats are present.
+            result.setdefault(source, value)
     return result
 
 
